@@ -1,36 +1,184 @@
 using System;
+using System.Data.OleDb;
 using System.Data;
-using System.Data.SqlClient;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using Excel = Microsoft.Office.Interop.Excel;
+using System.Data.SqlClient;
+using Spire.Xls;
 
-namespace YourNamespace
+namespace ExcelForm
 {
-    public partial class YourForm : Form
+    public partial class Form1 : Form
     {
-        private const string ConnectionString = "your_connection_string"; // Replace with your SQL Server connection string
-
-        public YourForm()
+        public Form1()
         {
             InitializeComponent();
         }
 
-        // Other methods...
-
-        private void SaveToDatabaseButton_Click(object sender, EventArgs e)
+        private void btnCreateExcel_Click(object sender, EventArgs e)
         {
-            SaveToDatabase();
+            // Prompt the user to choose the file location and name
+            using (SaveFileDialog saveFileDialog = new SaveFileDialog())
+            {
+                saveFileDialog.Filter = "Excel Files|*.xlsx|All Files|*.*";
+                saveFileDialog.Title = "Save Excel File";
+
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    // Create the Excel file
+                    try
+                    {
+                        CreateExcelFile(saveFileDialog.FileName);
+                        MessageBox.Show("Excel file created successfully!");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error creating Excel file: {ex.Message}");
+                    }
+                }
+            }
+
         }
 
+        private void CreateExcelFile(string filePath)
+        {
+            Excel.Application excelApp = new Excel.Application();
+            Excel.Workbook workbook = excelApp.Workbooks.Add();
+            Excel.Worksheet worksheet = (Excel.Worksheet)workbook.Sheets[1];
+            
+
+            // Save the workbook to the specified file path
+            workbook.SaveAs(filePath);
+
+            // Close and release resources
+            workbook.Close();
+            Marshal.ReleaseComObject(workbook);
+            excelApp.Quit();
+            Marshal.ReleaseComObject(excelApp);
+        }
+
+        private void btnOpenFile_Click(object sender, EventArgs e)
+        {
+            // Prompt the user to choose the Excel file to open
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "Excel Files|*.xlsx;*.xls|All Files|*.*";
+                openFileDialog.Title = "Open Excel File";
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    // Open the selected Excel file
+                    try
+                    {
+                        OpenExcelFile(openFileDialog.FileName);
+                        string fileName;
+                        fileName = openFileDialog.FileName;
+                        Workbook workbook = new Workbook();
+                        workbook.LoadFromFile(fileName);
+                        Worksheet sheet = workbook.Worksheets[0];
+                        this.StudentRecordDataGridView.DataSource = sheet.ExportDataTable();
+                        txtFilePath.Text = openFileDialog.FileName;
+
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error opening Excel file: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+
+
+        private void OpenExcelFile(string filePath)
+        {
+            Excel.Application excelApp = new Excel.Application();
+            Excel.Workbook workbook = excelApp.Workbooks.Open(filePath);
+            Excel.Worksheet worksheet = (Excel.Worksheet)workbook.Sheets[1];
+
+            excelApp.Visible = true;
+
+            // release resources
+            Marshal.ReleaseComObject(workbook);
+            Marshal.ReleaseComObject(excelApp);
+            
+        }
+
+
+        private void btnExportData_Click(object sender, EventArgs e)
+        {
+            GetStudentsRecord();
+            
+            con.Close();
+        }
+
+        private void GetStudentsRecord()
+        {
+            using (SqlConnection con = new SqlConnection(@"Data Source=172.17.3.1;Initial Catalog=TrainingDB;User ID=TrainingDB;Password=C1sc0@123"))
+            {
+                using (SqlCommand cmd = new SqlCommand($"SELECT * FROM {txtQuery.Text}", con))
+                {
+                    
+                    DataTable dt = new DataTable();
+
+                    if (con.State != ConnectionState.Open)
+                        con.Open();
+
+                    SqlDataReader sdr = cmd.ExecuteReader();
+                    dt.Load(sdr);
+
+                    StudentRecordDataGridView.DataSource = dt;
+                }
+            }
+        }
+
+       
+
+        
+
+        SqlConnection con = new SqlConnection("Data Source=172.17.3.1;Initial Catalog=TrainingDB;User ID=TrainingDB;Password=C1sc0@123");
+
+        public int StudentID;
+
+        private void btnsaveTodatabase_Click(object sender, EventArgs e)
+        {
+            con.Open();
+            SqlCommand cmd;
+            string str = "TRUNCATE TABLE Prakash_StudentsTb";
+            cmd = new SqlCommand(str, con);
+            cmd.ExecuteNonQuery();
+           
+            for (int index = 0; index < StudentRecordDataGridView.Rows.Count; index++)
+            {
+                cmd = new SqlCommand("INSERT INTO Prakash_StudentsTb VALUES (@Name, @FatherName, @Roll, @Address, @Mobile)", con)
+                {
+                    CommandType = CommandType.Text
+                };
+
+               
+                cmd.Parameters.AddWithValue("@Name", StudentRecordDataGridView.Rows[index].Cells[1].Value!=null? StudentRecordDataGridView.Rows[index].Cells[1].Value.ToString():string.Empty);
+                cmd.Parameters.AddWithValue("@FatherName", StudentRecordDataGridView.Rows[index].Cells[2].Value != null ? StudentRecordDataGridView.Rows[index].Cells[2].Value.ToString() : string.Empty);
+                cmd.Parameters.AddWithValue("@Roll", StudentRecordDataGridView.Rows[index].Cells[3].Value != null ? StudentRecordDataGridView.Rows[index].Cells[3].Value.ToString() : string.Empty);
+                cmd.Parameters.AddWithValue("@Address", StudentRecordDataGridView.Rows[index].Cells[4].Value != null ? StudentRecordDataGridView.Rows[index].Cells[4].Value.ToString() : string.Empty);
+                cmd.Parameters.AddWithValue("@Mobile", StudentRecordDataGridView.Rows[index].Cells[5].Value != null ? StudentRecordDataGridView.Rows[index].Cells[5].Value.ToString() : string.Empty);               
+                cmd.ExecuteNonQuery();
+            }
+            MessageBox.Show($"File imported successfully!");
+            con.Close();
+            
+
+        }
+       
         private void SaveToDatabase()
         {
             try
             {
-                using (SqlConnection connection = new SqlConnection(ConnectionString))
-                {
-                    connection.Open();
+                
+                    con.Open();
 
                     // Assuming the table structure is similar to the DataGridView columns
-                    string insertQuery = "INSERT INTO Prakash_StudentsTb (ColumnName1, ColumnName2, ColumnName3, ...)";
+                    string insertQuery = "INSERT INTO Prakash_StudentsTb ";
                     insertQuery += " VALUES ";
 
                     for (int i = 0; i < StudentRecordDataGridView.Rows.Count; i++)
@@ -56,18 +204,202 @@ namespace YourNamespace
                         }
                     }
 
-                    using (SqlCommand command = new SqlCommand(insertQuery, connection))
+                    using (SqlCommand command = new SqlCommand(insertQuery, con))
                     {
                         command.ExecuteNonQuery();
                     }
 
                     MessageBox.Show("Data saved to database successfully!");
-                }
+                con.Close();
+                
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Error: " + ex.Message);
             }
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            if(isValid())
+            {
+                using (SqlCommand cmd = new SqlCommand("INSERT INTO Prakash_StudentsTb VALUES (@Name, @FatherName, @Roll, @Address, @Mobile)", con))
+                {
+                    cmd.CommandType = CommandType.Text;
+
+                    cmd.Parameters.AddWithValue("@Name", txtStudentName.Text);
+                    cmd.Parameters.AddWithValue("@FatherName", txtFatherName.Text);
+                    cmd.Parameters.AddWithValue("@Roll", txtRollNumber.Text);
+                    cmd.Parameters.AddWithValue("@Address", txtAddress.Text);
+                    cmd.Parameters.AddWithValue("@Mobile", txtMobile.Text);
+                    //cmd.Parameters.AddWithValue("@StudentId", this.StudentID);
+
+
+                    if (con.State != ConnectionState.Open)
+                        con.Open();
+
+                    cmd.ExecuteNonQuery();
+
+                    con.Close();
+
+                    MessageBox.Show("New Student is successfully saved in the database", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    GetStudentsRecord();
+                    ResetFormControls();
+                }
+            }
+        }
+
+        private bool isValid()
+        {
+            if (txtStudentName.Text == string.Empty)
+            {
+                MessageBox.Show("Student Name is required", "Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            return true;
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            if(StudentID>0)
+            {
+                using (SqlCommand cmd = new SqlCommand("UPDATE Prakash_StudentsTb SET Name = @Name, FatherName = @FatherName, RollNumber = @Roll, Address = @Address, Mobile = @Mobile where StudentID = @StudentId", con))
+                {
+                    cmd.CommandType = CommandType.Text;
+
+                    cmd.Parameters.AddWithValue("@Name", txtStudentName.Text);
+                    cmd.Parameters.AddWithValue("@FatherName", txtFatherName.Text);
+                    cmd.Parameters.AddWithValue("@Roll", txtRollNumber.Text);
+                    cmd.Parameters.AddWithValue("@Address", txtAddress.Text);
+                    cmd.Parameters.AddWithValue("@Mobile", txtMobile.Text);
+                    cmd.Parameters.AddWithValue("@StudentId", this.StudentID);
+
+
+                    if (con.State != ConnectionState.Open)
+                        con.Open();
+
+                    cmd.ExecuteNonQuery();
+
+                    con.Close();
+
+                    MessageBox.Show("Student information is updated successfully", "Updated", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    GetStudentsRecord();
+                    ResetFormControls();
+                }
+            }
+            else
+            {
+                MessageBox.Show("Please select an student to update", "Select?", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+            }
+
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            if (StudentID > 0)
+            {
+                
+                    using (SqlCommand cmd = new SqlCommand("DELETE FROM Prakash_StudentsTb where StudentID = @StudentId", con))
+                    {
+                        cmd.CommandType = CommandType.Text;
+                        cmd.Parameters.AddWithValue("@StudentId", this.StudentID);
+
+                        if (con.State != ConnectionState.Open)
+                            con.Open();
+                        cmd.ExecuteNonQuery();
+                    con.Close();
+                        MessageBox.Show("Student is deleted from the system", "Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                
+
+                GetStudentsRecord();
+                ResetFormControls();
+            }
+            else
+            {
+                MessageBox.Show("Please Select an student to delete", "Delete?", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+            ResetFormControls();
+        }
+        private void ResetFormControls()
+        {
+            StudentID = 0;
+            txtStudentName.Clear();
+            txtFatherName.Clear();
+            txtRollNumber.Clear();
+            txtMobile.Clear();
+            txtAddress.Clear();
+
+            txtStudentName.Focus();
+
+            
+        }
+
+        private void StudentRecordDataGridView_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            StudentID = Convert.ToInt32(StudentRecordDataGridView.SelectedRows[0].Cells[0].Value);
+            txtStudentName.Text = StudentRecordDataGridView.SelectedRows[0].Cells[1].Value.ToString();
+            txtFatherName.Text = StudentRecordDataGridView.SelectedRows[0].Cells[2].Value.ToString();
+            txtRollNumber.Text = StudentRecordDataGridView.SelectedRows[0].Cells[3].Value.ToString();
+            txtAddress.Text = StudentRecordDataGridView.SelectedRows[0].Cells[4].Value.ToString();
+            txtMobile.Text = StudentRecordDataGridView.SelectedRows[0].Cells[5].Value.ToString();
+
+        }
+
+        private void btnSaveToExcel_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                SaveFileDialog saveFileDialog = new SaveFileDialog();
+                saveFileDialog.Filter = "Excel files (*.xlsx)|*.xlsx|All files (*.*)|*.*";
+                saveFileDialog.Title = "Save Excel File";
+              
+                if(saveFileDialog.ShowDialog()==DialogResult.OK)
+                {
+                    Excel.Application excelApp = new Excel.Application();
+                    //excelApp.Visible = true;
+                    Excel.Workbook workbook = excelApp.Workbooks.Add(Type.Missing);
+                    Excel.Worksheet worksheet = (Excel.Worksheet)workbook.ActiveSheet;
+                    
+                    for (int i = 1; i <= StudentRecordDataGridView.Columns.Count; i++)
+                    {
+                        worksheet.Cells[1, i] = StudentRecordDataGridView.Columns[i - 1].HeaderText;
+
+                    }
+                    for (int i = 0; i < StudentRecordDataGridView.Rows.Count; i++)
+                    {
+                        for (int j = 0; j < StudentRecordDataGridView.Columns.Count; j++)
+                        {
+                        object cellValue = StudentRecordDataGridView.Rows[i].Cells[j].Value;
+                        worksheet.Cells[i + 2, j + 1] = cellValue != null ? cellValue.ToString() : string.Empty;
+                        }
+                    }
+
+                    workbook.SaveAs(saveFileDialog.FileName);
+                    workbook.Close();
+                    excelApp.Quit();
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp);
+                    MessageBox.Show("Excel file saved successfully");
+                }
+
+                
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show("error: " + ex.Message);
+            }
+            
+
+            
+       
+
+
         }
     }
 }
