@@ -1,0 +1,73 @@
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Windows.Forms;
+
+namespace YourNamespace
+{
+    public partial class YourForm : Form
+    {
+        private const string ConnectionString = "your_connection_string"; // Replace with your SQL Server connection string
+
+        public YourForm()
+        {
+            InitializeComponent();
+        }
+
+        // Other methods...
+
+        private void SaveToDatabaseButton_Click(object sender, EventArgs e)
+        {
+            SaveToDatabase();
+        }
+
+        private void SaveToDatabase()
+        {
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(ConnectionString))
+                {
+                    connection.Open();
+
+                    // Assuming the table structure is similar to the DataGridView columns
+                    string insertQuery = "INSERT INTO Prakash_StudentsTb (ColumnName1, ColumnName2, ColumnName3, ...)";
+                    insertQuery += " VALUES ";
+
+                    for (int i = 0; i < StudentRecordDataGridView.Rows.Count; i++)
+                    {
+                        insertQuery += "(";
+
+                        for (int j = 0; j < StudentRecordDataGridView.Columns.Count; j++)
+                        {
+                            object cellValue = StudentRecordDataGridView.Rows[i].Cells[j].Value;
+                            insertQuery += "'" + (cellValue != null ? cellValue.ToString() : "") + "'";
+
+                            if (j < StudentRecordDataGridView.Columns.Count - 1)
+                            {
+                                insertQuery += ",";
+                            }
+                        }
+
+                        insertQuery += ")";
+
+                        if (i < StudentRecordDataGridView.Rows.Count - 1)
+                        {
+                            insertQuery += ",";
+                        }
+                    }
+
+                    using (SqlCommand command = new SqlCommand(insertQuery, connection))
+                    {
+                        command.ExecuteNonQuery();
+                    }
+
+                    MessageBox.Show("Data saved to database successfully!");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+        }
+    }
+}
