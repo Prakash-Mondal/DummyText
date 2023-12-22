@@ -1,190 +1,73 @@
 using System;
 using System.Data;
 using System.Data.SqlClient;
-using System.Runtime.InteropServices;
-using System.Windows.Forms;
-using Excel = Microsoft.Office.Interop.Excel;
-using Spire.Xls;
+using Microsoft.VisualBasic.FileIO;
 
-namespace ExcelForm
+class Program
 {
-    public partial class Form1 : Form
+    static void Main()
     {
-        SqlConnection con = new SqlConnection("Data Source=172.17.3.1;Initial Catalog=TrainingDB;User ID=TrainingDB;Password=C1sc0@123");
-
-        public Form1()
+        try
         {
-            InitializeComponent();
-        }
+            // Replace with your connection string and CSV file path
+            string connectionString = "Your_Connection_String";
+            string csvFilePath = "Your_CSV_File_Path.csv";
+            string tableName = "Your_Destination_Table_Name";
 
-        private void btnCreateExcel_Click(object sender, EventArgs e)
-        {
-            try
+            // Create a DataTable to hold the data from the CSV file
+            DataTable dataTable = new DataTable();
+
+            // Read the CSV file into the DataTable
+            using (var parser = new TextFieldParser(csvFilePath))
             {
-                using (SaveFileDialog saveFileDialog = new SaveFileDialog())
-                {
-                    saveFileDialog.Filter = "Excel Files|*.xlsx|All Files|*.*";
-                    saveFileDialog.Title = "Save Excel File";
+                parser.TextFieldType = FieldType.Delimited;
+                parser.SetDelimiters(",");
 
-                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        CreateExcelFile(saveFileDialog.FileName);
-                        MessageBox.Show("Excel file created successfully!");
-                    }
+                // Assuming the first row in the CSV file contains column headers
+                string[] headers = parser.ReadFields();
+                foreach (string header in headers)
+                {
+                    dataTable.Columns.Add(header);
+                }
+
+                while (!parser.EndOfData)
+                {
+                    string[] fields = parser.ReadFields();
+                    dataTable.Rows.Add(fields);
                 }
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating Excel file: {ex.Message}");
-            }
-        }
 
-        private void CreateExcelFile(string filePath)
-        {
-            try
+            // Use SqlBulkCopy to copy data from DataTable to SQL Server table
+            using (SqlConnection connection = new SqlConnection(connectionString))
             {
-                Excel.Application excelApp = new Excel.Application();
-                Excel.Workbook workbook = excelApp.Workbooks.Add();
-                Excel.Worksheet worksheet = (Excel.Worksheet)workbook.Sheets[1];
+                connection.Open();
 
-                workbook.SaveAs(filePath);
-
-                workbook.Close();
-                Marshal.ReleaseComObject(workbook);
-                excelApp.Quit();
-                Marshal.ReleaseComObject(excelApp);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating Excel file: {ex.Message}");
-            }
-        }
-
-        private void btnOpenFile_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                using (OpenFileDialog openFileDialog = new OpenFileDialog())
+                using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
                 {
-                    openFileDialog.Filter = "Excel Files|*.xlsx;*.xls|All Files|*.*";
-                    openFileDialog.Title = "Open Excel File";
+                    bulkCopy.DestinationTableName = tableName;
 
-                    if (openFileDialog.ShowDialog() == DialogResult.OK)
+                    // Map the DataTable columns to the SQL Server table columns
+                    foreach (DataColumn column in dataTable.Columns)
                     {
-                        OpenExcelFile(openFileDialog.FileName);
-                        string fileName = openFileDialog.FileName;
-                        Workbook workbook = new Workbook();
-                        workbook.LoadFromFile(fileName);
-                        Worksheet sheet = workbook.Worksheets[0];
-                        this.StudentRecordDataGridView.DataSource = sheet.ExportDataTable();
-                        txtFilePath.Text = openFileDialog.FileName;
+                        bulkCopy.ColumnMappings.Add(column.ColumnName, column.ColumnName);
                     }
+
+                    // Specify the number of rows in each batch to be sent to the server
+                    bulkCopy.BatchSize = 100;
+
+                    // Set the timeout for the operation (in seconds)
+                    bulkCopy.BulkCopyTimeout = 600;
+
+                    // Write the data to the SQL Server table
+                    bulkCopy.WriteToServer(dataTable);
                 }
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error opening Excel file: {ex.Message}");
-            }
-        }
 
-        private void OpenExcelFile(string filePath)
+            Console.WriteLine("Bulk copy completed successfully.");
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                Excel.Application excelApp = new Excel.Application();
-                Excel.Workbook workbook = excelApp.Workbooks.Open(filePath);
-                Excel.Worksheet worksheet = (Excel.Worksheet)workbook.Sheets[1];
-
-                excelApp.Visible = true;
-
-                Marshal.ReleaseComObject(workbook);
-                Marshal.ReleaseComObject(excelApp);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error opening Excel file: {ex.Message}");
-            }
+            Console.WriteLine($"Error: {ex.Message}");
         }
-
-        private void btnExportData_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                GetStudentsRecord();
-                con.Close();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error exporting data: {ex.Message}");
-            }
-        }
-
-        private void GetStudentsRecord()
-        {
-            try
-            {
-                using (SqlConnection con = new SqlConnection("YourConnectionStringHere"))
-                {
-                    using (SqlCommand cmd = new SqlCommand($"SELECT * FROM {txtQuery.Text}", con))
-                    {
-                        DataTable dt = new DataTable();
-
-                        if (con.State != ConnectionState.Open)
-                            con.Open();
-
-                        SqlDataReader sdr = cmd.ExecuteReader();
-                        dt.Load(sdr);
-
-                        StudentRecordDataGridView.DataSource = dt;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error getting students record: {ex.Message}");
-            }
-        }
-
-        private void btnsaveTodatabase_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                con.Open();
-                SqlCommand cmd;
-                string str = "TRUNCATE TABLE Prakash_StudentsTb";
-                cmd = new SqlCommand(str, con);
-                cmd.ExecuteNonQuery();
-
-                for (int index = 0; index < StudentRecordDataGridView.Rows.Count; index++)
-                {
-                    try
-                    {
-                        cmd = new SqlCommand("INSERT INTO Prakash_StudentsTb VALUES (@Name, @FatherName, @Roll, @Address, @Mobile)", con)
-                        {
-                            CommandType = CommandType.Text
-                        };
-
-                        cmd.Parameters.AddWithValue("@Name", StudentRecordDataGridView.Rows[index].Cells[1].Value != null ? StudentRecordDataGridView.Rows[index].Cells[1].Value.ToString() : string.Empty);
-                        cmd.Parameters.AddWithValue("@FatherName", StudentRecordDataGridView.Rows[index].Cells[2].Value != null ? StudentRecordDataGridView.Rows[index].Cells[2].Value.ToString() : string.Empty);
-                        cmd.Parameters.AddWithValue("@Roll", StudentRecordDataGridView.Rows[index].Cells[3].Value != null ? StudentRecordDataGridView.Rows[index].Cells[3].Value.ToString() : string.Empty);
-                        cmd.Parameters.AddWithValue("@Address", StudentRecordDataGridView.Rows[index].Cells[4].Value != null ? StudentRecordDataGridView.Rows[index].Cells[4].Value.ToString() : string.Empty);
-                        cmd.Parameters.AddWithValue("@Mobile", StudentRecordDataGridView.Rows[index].Cells[5].Value != null ? StudentRecordDataGridView.Rows[index].Cells[5].Value.ToString() : string.Empty);
-                        cmd.ExecuteNonQuery();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Error saving to database: {ex.Message}");
-                    }
-                }
-                MessageBox.Show($"File imported successfully!");
-                con.Close();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error saving to database: {ex.Message}");
-            }
-        }
-
-        // Rest of your code...
     }
 }
